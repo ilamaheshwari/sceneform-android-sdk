@@ -40,6 +40,9 @@ import com.google.ar.sceneform.ux.TransformableNode;
 public class HelloSceneformActivity extends AppCompatActivity {
   private static final String TAG = HelloSceneformActivity.class.getSimpleName();
   private static final double MIN_OPENGL_VERSION = 3.0;
+  private PointerDrawable pointer = new PointerDrawable();
+  private boolean isTracking;
+  private boolean isHitting;
 
   private ArFragment arFragment;
   private ModelRenderable andyRenderable;
@@ -57,6 +60,11 @@ public class HelloSceneformActivity extends AppCompatActivity {
 
     setContentView(R.layout.activity_ux);
     arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
+    
+    fragment.getArSceneView().getScene().addOnUpdateListener(frameTime -> {
+    fragment.onUpdate(frameTime);
+    onUpdate();
+    });
 
     // When you build a Renderable, Sceneform loads its resources in the background while returning
     // a CompletableFuture. Call thenAccept(), handle(), or check isDone() before calling get().
@@ -120,6 +128,60 @@ public class HelloSceneformActivity extends AppCompatActivity {
  node.setParent(anchorNode);
  fragment.getArSceneView().getScene().addChild(anchorNode);
  node.select();
+}
+
+private void onUpdate() {
+ boolean trackingChanged = updateTracking();
+ View contentView = findViewById(android.R.id.content);
+ if (trackingChanged) {
+   if (isTracking) {
+     contentView.getOverlay().add(pointer);
+   } else {
+     contentView.getOverlay().remove(pointer);
+   }
+   contentView.invalidate();
+ }
+
+ if (isTracking) {
+   boolean hitTestChanged = updateHitTest();
+   if (hitTestChanged) {
+     pointer.setEnabled(isHitting);
+     contentView.invalidate();
+   }
+ }
+}
+      
+private boolean updateTracking() {
+ Frame frame = fragment.getArSceneView().getArFrame();
+ boolean wasTracking = isTracking;
+ isTracking = frame != null &&
+              frame.getCamera().getTrackingState() == TrackingState.TRACKING;
+ return isTracking != wasTracking;
+}
+
+private boolean updateHitTest() {
+ Frame frame = fragment.getArSceneView().getArFrame();
+ android.graphics.Point pt = getScreenCenter();
+ List<HitResult> hits;
+ boolean wasHitting = isHitting;
+ isHitting = false;
+ if (frame != null) {
+   hits = frame.hitTest(pt.x, pt.y);
+   for (HitResult hit : hits) {
+     Trackable trackable = hit.getTrackable();
+     if (trackable instanceof Plane &&
+             ((Plane) trackable).isPoseInPolygon(hit.getHitPose())) {
+       isHitting = true;
+       break;
+     }
+   }
+ }
+ return wasHitting != isHitting;
+}
+
+private android.graphics.Point getScreenCenter() {
+ View vw = findViewById(android.R.id.content);
+ return new android.graphics.Point(vw.getWidth()/2, vw.getHeight()/2);
 }
 
   /**
